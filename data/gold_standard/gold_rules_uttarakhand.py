@@ -115,16 +115,21 @@ def get_gold_rules_uttarakhand() -> Dict[str, SchemeEligibilityRule]:
         unmodeled_discretionary_conditions="The benefit is provided to accident victims and individuals requiring emergency services."
     )
 
-    # 6. snsu: Sanitary Napkin Scheme
-    # Female
+    # 6. snsu: Sanitary Napkin Scheme - Uttarakhand
+    # Res Uttarakhand + Female
+    c_snsu_res = SingleCriterion(
+        criterion_id="snsu_c1", attribute=AttributeName.STATE_RESIDENCE, operator=Operator.EQ, target_value="Uttarakhand",
+        verbatim_source_sentence="All adolescent girls and women residing in Uttarakhand are eligible to purchase sanitary napkins at subsidized rates from Anganwadi centres.",
+        is_mandatory=True, review_status=ReviewStatus.VERIFIED
+    )
     c_snsu_fem = SingleCriterion(
-        criterion_id="snsu_c1", attribute=AttributeName.GENDER, operator=Operator.EQ, target_value="female",
+        criterion_id="snsu_c2", attribute=AttributeName.GENDER, operator=Operator.EQ, target_value="female",
         verbatim_source_sentence="All adolescent girls and women are eligible to purchase sanitary napkins at subsidized rates from Anganwadi centres.",
         is_mandatory=True, review_status=ReviewStatus.VERIFIED
     )
     rules["snsu"] = SchemeEligibilityRule(
         scheme_id="snsu",
-        rule_group=CriterionGroup(operator=LogicalGroupOperator.ALL, criteria=[c_snsu_fem])
+        rule_group=CriterionGroup(operator=LogicalGroupOperator.ALL, criteria=[c_snsu_res, c_snsu_fem])
     )
 
     # 7. kkssuk: Khushiyon Ki Sawari Sewa
