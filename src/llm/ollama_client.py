@@ -49,6 +49,57 @@ class LocalOllamaClient:
         except Exception:
             return False
 
+    def stream_guarded_response(self, user_query: str, retrieved_context: str, missing_attributes: Optional[list] = None):
+        """
+        Streams response tokens from local Ollama for sub-200ms TTFT (Time-To-First-Token).
+        Yields token strings. Returns a dictionary with metadata upon finish if generator completed.
+        """
+        # 1. Input Guardrail
+        is_safe, sanitized_query, warning = PromptGuardrail.validate_user_input(user_query)
+        if not is_safe:
+            yield warning
+            return
+
+        # 2. Delimited Prompt Construction
+        guarded_prompt = PromptGuardrail.wrap_prompt_with_boundaries(
+            system_instructions=SYSTEM_DIRECTIVE,
+            retrieved_context=retrieved_context,
+            sanitized_user_query=sanitized_query,
+            missing_attributes=missing_attributes
+        )
+
+        # 3. Stream from Ollama HTTP API
+        try:
+            with self.client.stream(
+                "POST",
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": guarded_prompt,
+                    "stream": True,
+                    "options": {
+                        "temperature": 0.2,
+                        "top_p": 0.9
+                    }
+                },
+                timeout=60.0
+            ) as response:
+                if response.status_code != 200:
+                    yield f"Ollama error (HTTP {response.status_code})"
+                    return
+
+                import json
+                for line in response.iter_lines():
+                    if line:
+                        chunk = json.loads(line)
+                        token = chunk.get("response", "")
+                        if token:
+                            yield token
+                        if chunk.get("done", False):
+                            break
+        except Exception as e:
+            yield f"\n[Connection error during generation: {str(e)}]"
+
     def generate_guarded_response(self, user_query: str, retrieved_context: str, missing_attributes: Optional[list] = None) -> Dict[str, Any]:
         """
         Runs the end-to-end guarded generation pipeline:

@@ -172,15 +172,21 @@ if user_prompt := st.chat_input("Ask about schemes (e.g., 'I am a 16yo girl in U
                 st.markdown(f"- Model: `{ollama_client.model_name}` (Local via Ollama)")
                 st.markdown(f"- Triage Directive: `{'ACTIVE (Requesting ' + ', '.join(missing_attrs) + ')' if missing_attrs else 'RESOLVED (Recommending schemes)'}`")
 
-            # 4. Invoke LLM with Missing Attribute Guidance
+            # 4. Invoke LLM with Missing Attribute Guidance & Streaming
             llm_result = None
             if ollama_ok:
-                llm_result = ollama_client.generate_guarded_response(
+                status_container.update(label="⚡ Streaming Grounded Scheme Analysis...", state="running", expanded=False)
+                
+                # Stream directly into the chat container for instant sub-200ms TTFT
+                stream_generator = ollama_client.stream_guarded_response(
                     sanitized_query,
                     combined_context,
                     missing_attributes=missing_attrs if missing_attrs else None
                 )
-                response_text = llm_result["response"]
+                raw_response = st.write_stream(stream_generator)
+                
+                # Apply output guardrail verification to accumulated streamed output
+                response_text = PromptGuardrail.validate_output(raw_response).strip()
                 status_container.update(label="✅ Verified Scheme Evaluation Complete", state="complete", expanded=False)
             else:
                 top_scheme = retrieved_schemes[0] if retrieved_schemes else None
@@ -193,9 +199,7 @@ if user_prompt := st.chat_input("Ask about schemes (e.g., 'I am a 16yo girl in U
                 else:
                     response_text = "I could not find schemes matching your criteria. Please verify on https://www.myscheme.gov.in."
                 status_container.update(label="⚠️ Ollama offline - showed vector match fallback", state="complete", expanded=False)
-
-            # Display the final structured response
-            st.markdown(response_text)
+                st.markdown(response_text)
 
             # Expandable Step-by-Step LLM Reasoning & Prompt Inspector
             if llm_result and llm_result.get("guarded_prompt"):

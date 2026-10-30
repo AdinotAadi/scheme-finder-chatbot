@@ -49,10 +49,13 @@ class SchemeVectorStore:
     _client = None
 
     def __init__(self, db_path: str = QDRANT_PATH):
-        Path(db_path).mkdir(parents=True, exist_ok=True)
-        if SchemeVectorStore._client is None:
-            SchemeVectorStore._client = QdrantClient(path=db_path)
-        self.client = SchemeVectorStore._client
+        if db_path == ":memory:":
+            self.client = QdrantClient(":memory:")
+        else:
+            Path(db_path).mkdir(parents=True, exist_ok=True)
+            if SchemeVectorStore._client is None:
+                SchemeVectorStore._client = QdrantClient(path=db_path)
+            self.client = SchemeVectorStore._client
         self._init_collection()
 
     def _init_collection(self):
