@@ -1,0 +1,19 @@
+#!/bin/sh
+# Optional git commit-msg hook: require a Jira ticket key in the commit message.
+# Install per repo: copy to .git/hooks/commit-msg (chmod +x). Pure POSIX sh, no Python needed.
+# Exempt: merge/revert commits and local-only branches named wip/NO-TICKET-*.
+# NOTE: git ignores .git/hooks when core.hooksPath is set (e.g. org-managed hooks). In that case
+# the Claude guard (scripts/aidlc-governance-guard.py) still checks `git commit -m` via the Bash tool.
+# Policy source: common/release-governance.md Gate G2.
+first=$(head -n 1 "$1")
+case "$first" in
+  Merge\ *|Revert\ *) exit 0 ;;
+esac
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+case "$branch" in
+  wip/NO-TICKET-*) exit 0 ;;
+esac
+if ! grep -Eq '\b[A-Z][A-Z0-9]+-[0-9]+\b' "$1"; then
+  echo 'Release governance: commit message must reference a Jira ticket key, e.g. "fix(scope): summary [PROJ-1234]".' >&2
+  exit 1
+fi
