@@ -20,20 +20,44 @@ from qdrant_client.models import (
 
 QDRANT_PATH = "data/qdrant_db"
 COLLECTION_NAME = "myscheme_schemes"
-VECTOR_DIM = 256
+VECTOR_DIM = 384
+EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+
+_GLOBAL_EMBED_MODEL = None
+
+def get_embedding_model():
+    """Lazily loads the FastEmbed ONNX embedding model as a singleton."""
+    global _GLOBAL_EMBED_MODEL
+    if _GLOBAL_EMBED_MODEL is None:
+        try:
+            from fastembed import TextEmbedding
+            _GLOBAL_EMBED_MODEL = TextEmbedding(model_name=EMBEDDING_MODEL_NAME)
+        except Exception as e:
+            print(f"[Warning] Failed to load FastEmbed model '{EMBEDDING_MODEL_NAME}': {e}. Falling back to feature hashing.")
+            _GLOBAL_EMBED_MODEL = False
+    return _GLOBAL_EMBED_MODEL
 
 def compute_text_embedding(text: str, dim: int = VECTOR_DIM) -> List[float]:
     """
-    Computes a deterministic, feature-hashed normalized term-frequency embedding.
-    Ensures zero external model download latency and complete offline reproducibility.
+    Computes dense semantic embeddings using ONNX-accelerated FastEmbed (BAAI/bge-small-en-v1.5).
+    Falls back gracefully to normalized feature hashing if FastEmbed is unavailable.
     """
+    model = get_embedding_model()
+    if model:
+        try:
+            # FastEmbed generates normalized 384-dim dense embeddings
+            embeddings = list(model.embed([text]))
+            return embeddings[0].tolist()
+        except Exception:
+            pass
+
+    # Fallback to feature hashing if ONNX model fails
     tokens = re.findall(r"\w+", text.lower())
     if not tokens:
         return [0.0] * dim
         
     vec = np.zeros(dim, dtype=np.float32)
     for tok in tokens:
-        # Hashing trick with MD5 to uniform buckets
         h = int(hashlib.md5(tok.encode("utf-8")).hexdigest(), 16)
         idx = h % dim
         sign = 1.0 if ((h >> 8) & 1) == 0 else -1.0
