@@ -57,7 +57,11 @@ The conversational layer uses **Meta's Llama 3.2:3b** hosted locally on your dev
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ System Architecture & ASD-SDE Engineering Docs
+
+Scheme Finder follows the **Adaptive Software Development & Software Design Engineering (ASD-SDE)** standard.
+
+For comprehensive architectural design, block diagrams, C4 container models, Kleene 3-valued logic flows, sequence diagrams, and STRIDE threat analysis, see the [Full Architecture Specification](docs/architecture/ARCHITECTURE.md).
 
 ```
 [User Natural Language Input]
@@ -81,6 +85,13 @@ The conversational layer uses **Meta's Llama 3.2:3b** hosted locally on your dev
                ▼
 [Streamlit UI + Transparency Expander with Verbatim Portal Links & Documents]
 ```
+
+### Key Engineering Artifacts & Reports:
+* [ASD-SDE Architecture & Design Specification](docs/architecture/ARCHITECTURE.md)
+* [Data Cleaning & Schema Harmonization Report](reports/slice0_data_quality_report.md)
+* [Public Ingestion & Extraction Report](reports/slice1_ingestion_report.md)
+* [3-Valued Kleene Logic Verification & Evaluation Report](reports/slice4_evaluation_report.md)
+* [Comprehensive Setup Guide](SETUP_GUIDE.md)
 
 ---
 
