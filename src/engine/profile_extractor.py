@@ -41,9 +41,10 @@ def extract_attributes_from_messages(messages: List[Dict[str, str]], current_pro
         elif any(re.search(pat, user_texts) for pat in male_patterns):
             profile_dict["gender"] = "male"
 
-    # 3. Age extraction (e.g., "16 years old", "age 24", "am 16")
+    # 3. Age extraction (e.g., "17-year-old", "16 years old", "age 24", "am 16")
     if profile_dict.get("age") is None:
         age_patterns = [
+            r"\b([0-9]{1,2})\s*[-]?\s*year[- ]old\b",
             r"\b(?:i am|age|aged|am)\s*([0-9]{1,2})\b",
             r"\b([0-9]{1,2})\s*(?:years?\s*old|yo|yr|yrs)\b"
         ]
