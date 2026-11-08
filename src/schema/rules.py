@@ -90,6 +90,7 @@ class SchemeEligibilityRule(BaseModel):
 
 class UserProfile(BaseModel):
     """User profile. All fields optional to explicitly model unknown/missing data."""
+    full_name: Optional[str] = None
     age: Optional[int] = None
     annual_income_inr: Optional[float] = None
     gender: Optional[str] = None                    # female, male, other
