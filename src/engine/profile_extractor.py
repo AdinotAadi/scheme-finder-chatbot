@@ -24,7 +24,23 @@ def extract_attributes_from_messages(messages: List[Dict[str, str]], current_pro
     
     user_texts = " ".join([m["content"] for m in messages if m["role"] == "user"]).lower()
 
-    # 1. State extraction
+    # 1. Name extraction (e.g., "I am Sunita Rawat", "My name is Sunita", "I'm Sunita")
+    if not profile_dict.get("full_name"):
+        name_patterns = [
+            r"\b(?:i am|my name is|myself|i'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b",
+            r"\b(?:i am|my name is|myself|i'm)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*?)(?:,|\.|\b\s+a\b|\s+an\b|\s+currently\b|\s+living\b|\s+enrolled\b|\s+residing\b)",
+        ]
+        raw_user_texts = " ".join([m["content"] for m in messages if m["role"] == "user"])
+        for pat in name_patterns:
+            m = re.search(pat, raw_user_texts, re.IGNORECASE)
+            if m:
+                extracted = m.group(1).strip()
+                # filter out non-names like "a 17-year-old"
+                if extracted and not re.match(r"^(?:a|an|the|\d+)", extracted, re.IGNORECASE):
+                    profile_dict["full_name"] = extracted.title()
+                    break
+
+    # 2. State extraction
     if not profile_dict.get("state_residence"):
         for state in INDIAN_STATES:
             if state.lower() in user_texts:
@@ -84,6 +100,10 @@ def extract_attributes_from_messages(messages: List[Dict[str, str]], current_pro
                 profile_dict["annual_income_inr"] = clean_num
             except Exception:
                 pass
+
+    # 8. BPL status
+    if "bpl" in user_texts or "antyodaya" in user_texts or "below poverty" in user_texts:
+        profile_dict["is_bpl"] = True
 
     return UserProfile(**profile_dict)
 
