@@ -136,6 +136,17 @@ flowchart LR
 
 ---
 
+## 📝 Automated Application Form Engine
+
+Scheme Finder includes an automated document preparation engine:
+1. **Universal Multi-Domain Engine**: Dynamically auto-fills and renders official 1-page A4 PDF intake forms across **all 145+ schemes** in the database with domain-specific particulars (Health, Education, Maternity, Labour, Social Security), legal declarations, authority attestation blocks, and verbatim document checklists.
+2. **1:1 Official Form Overlay Engine**: For central and state welfare proformas (such as *Rashtriya Arogya Nidhi* and *Delhi Arogya Nidhi*), the engine uses authentic scanned government application forms as background templates and merges typed citizen particulars directly onto the physical lines and boxes with millimeter-level coordinate precision.
+3. **100% Offline & Private**: All document generation executes locally with ReportLab and `pypdf`. Zero citizen personal data is transmitted over the network.
+
+See the complete **[ASD-STE Technical Specification](docs/SPECIFICATION_STE.md)** for detailed module design, physical coordinate mappings, and architecture.
+
+---
+
 ## 🧪 Testing and Verification
 
 Run the test suite using `uv` or `pytest`:
