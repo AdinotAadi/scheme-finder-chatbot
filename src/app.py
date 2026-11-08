@@ -17,6 +17,9 @@ from src.engine.vector_store import SchemeVectorStore
 from src.engine.guardrails import PromptGuardrail
 from src.engine.profile_extractor import extract_attributes_from_messages, get_missing_essential_attributes
 from src.schema.rules import UserProfile
+from src.schema.forms import RAN_HMDG_ApplicationForm, DelhiArogyaNidhi_ApplicationForm
+from src.engine.form_autofill import FormAutoFillEngine
+from src.engine.pdf_generator import ApplicationFormPDFGenerator
 from src.llm.ollama_client import LocalOllamaClient
 
 st.set_page_config(
@@ -227,4 +230,149 @@ if user_prompt := st.chat_input("Ask about schemes (e.g., 'I am a 16yo girl in U
                         st.markdown("---")
 
             st.session_state.messages.append({"role": "assistant", "content": response_text})
+
+            # 5. Universal Multi-Domain Application Form Auto-Fill & PDF Generator Section
+            st.markdown("---")
+            with st.expander("📝 Auto-Fill Official Application Form & Download PDF", expanded=False):
+                st.markdown("Generate ready-to-print official government application forms dynamically customized for **any eligible scheme**.")
+                
+                # Build scheme options from retrieved candidates
+                scheme_options = {}
+                for h in retrieved_schemes:
+                    label = f"{h['name']} ({h.get('state') or 'Central'})"
+                    scheme_options[label] = h
+                
+                # Include standard dedicated health templates
+                scheme_options["Rashtriya Arogya Nidhi (RAN) & HMDG [Central Ministry]"] = {
+                    "scheme_id": "ran_hmdg", "name": "Rashtriya Arogya Nidhi (RAN) & HMDG",
+                    "level": "Central", "state": "Central", "documents_required": "- Medical Estimate\n- Income Certificate\n- Ration card\n- Aadhaar"
+                }
+                scheme_options["Delhi Arogya Nidhi / Kosh (DAN/DAK) [Govt of Delhi]"] = {
+                    "scheme_id": "dan_dak", "name": "Delhi Arogya Nidhi / Kosh",
+                    "level": "State", "state": "Delhi", "documents_required": "- Estimate certificate\n- 3-yr Domicile\n- SDM Income Certificate"
+                }
+
+                chosen_label = st.selectbox("Select Target Scheme to Auto-Fill:", list(scheme_options.keys()))
+                target_scheme = scheme_options[chosen_label]
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    default_name = getattr(updated_profile, "full_name", None) or "Beneficiary"
+                    f_name = st.text_input("Applicant / Patient Full Name", value=default_name, key="form_p_name")
+                    f_age = st.number_input("Age (Years)", min_value=1, max_value=120, value=int(updated_profile.age) if updated_profile.age else 25, key="form_p_age")
+                    f_address = st.text_input("Residential Address & Domicile", value=f"{updated_profile.district_residence or 'Haridwar'}, {updated_profile.state_residence or 'Uttarakhand'}", key="form_address")
+                    f_income = st.number_input("Monthly Family Income (₹)", min_value=0.0, value=round((updated_profile.annual_income_inr or 60000.0) / 12.0, 2), key="form_income")
+                with col2:
+                    f_parent = st.text_input("Father's / Mother's / Spouse Name", value="Family Head", key="form_parent")
+                    f_mobile = st.text_input("Contact Mobile Number", value="9876543210", key="form_mobile")
+                    is_bpl_val = getattr(updated_profile, "is_bpl", False)
+                    f_ration = st.text_input("Ration Card / Food Security ID", value="BPL-Antyodaya-Enclosed" if is_bpl_val else "Attached", key="form_ration")
+                    is_student_val = getattr(updated_profile, "is_student", False)
+                    default_extra = "Government Inter College" if is_student_val else "Government Institution / Hospital"
+                    f_extra = st.text_input("Scheme Specific Particulars (e.g., Hospital / School / BOCW Regn)", value=default_extra, key="form_extra")
+
+                from src.engine.template_overlay import OfficialTemplateOverlayEngine
+
+                # Check if 1:1 official physical government template is available for chosen scheme
+                is_1to1_available = OfficialTemplateOverlayEngine.is_template_available(chosen_label)
+                form_mode = "1:1 Official Govt Template"
+                if is_1to1_available:
+                    form_mode = st.radio(
+                        "Form Format Option:",
+                        ["1:1 Authentic Official Paper Proforma (Pixel-Perfect Scan)", "Universal Standardized Digital Proforma"],
+                        index=0,
+                        horizontal=True,
+                        key="form_mode_radio"
+                    )
+
+                # Generate Dynamic Universal or Specialized Form
+                if "Rashtriya Arogya" in chosen_label:
+                    if is_1to1_available and "1:1 Authentic" in form_mode:
+                        pdf_data = OfficialTemplateOverlayEngine.fill_ran_hmdg_official(
+                            profile=updated_profile,
+                            hospital_name="AIIMS New Delhi",
+                            disease_name=f_extra if f_extra != "Government Institution / Hospital" else "Chronic Illness",
+                            amount_requested=150000.0,
+                            applicant_name=f_name,
+                            parent_spouse_name=f_parent,
+                            contact_mobile=f_mobile,
+                            ration_card_no=f_ration,
+                        )
+                        file_name = f"Official_1to1_RAN_HMDG_{f_name.replace(' ', '_')}.pdf"
+                    else:
+                        ran_form, _ = FormAutoFillEngine.map_to_ran_hmdg(
+                            updated_profile,
+                            {
+                                "patient_name": f_name,
+                                "patient_age": f_age,
+                                "disease_name": f_extra,
+                                "hospital_name": "Government Medical College / AIIMS",
+                                "permanent_address": f_address,
+                                "monthly_income_inr": f_income,
+                                "financial_assistance_required_inr": 150000.0,
+                                "ration_card_no": f_ration,
+                                "mobile_no": f_mobile,
+                                "parent_name": f_parent
+                            }
+                        )
+                        pdf_data = ApplicationFormPDFGenerator.generate_ran_hmdg_pdf(ran_form)
+                        file_name = f"RAN_HMDG_Application_{f_name.replace(' ', '_')}.pdf"
+                elif "Delhi Arogya" in chosen_label:
+                    if is_1to1_available and "1:1 Authentic" in form_mode:
+                        pdf_data = OfficialTemplateOverlayEngine.fill_delhi_arogya_nidhi_official(
+                            profile=updated_profile,
+                            hospital_name="Lok Nayak Jai Prakash (LNJP) Hospital, Delhi",
+                            disease_name=f_extra if f_extra != "Government Institution / Hospital" else "Cardiac Treatment",
+                            amount_requested=120000.0,
+                            applicant_name=f_name,
+                            parent_spouse_name=f_parent,
+                            contact_mobile=f_mobile,
+                            ration_card_no=f_ration,
+                        )
+                        file_name = f"Official_1to1_Delhi_Arogya_Nidhi_{f_name.replace(' ', '_')}.pdf"
+                    else:
+                        dan_form, _ = FormAutoFillEngine.map_to_delhi_arogya_nidhi(
+                            updated_profile,
+                            {
+                                "patient_name": f_name,
+                                "patient_age": f_age,
+                                "disease_name": f_extra,
+                                "hospital_name": "Government Hospital of Delhi",
+                                "residential_address": f_address,
+                                "monthly_family_income_inr": f_income,
+                                "parent_or_husband_name": f_parent
+                            }
+                        )
+                        pdf_data = ApplicationFormPDFGenerator.generate_delhi_arogya_nidhi_pdf(dan_form)
+                        file_name = f"Delhi_Arogya_Nidhi_Application_{f_name.replace(' ', '_')}.pdf"
+                else:
+                    # Universal Dynamic Welfare Form applicable across ALL 145+ schemes
+                    u_form, _ = FormAutoFillEngine.map_to_universal_form(
+                        scheme_dict=target_scheme,
+                        profile=updated_profile,
+                        extracted_data={
+                            "applicant_name": f_name,
+                            "applicant_age": f_age,
+                            "permanent_address": f_address,
+                            "monthly_family_income_inr": f_income,
+                            "parent_name": f_parent,
+                            "mobile_no": f_mobile,
+                            "ration_card_no": f_ration,
+                            "school_name": f_extra,
+                            "disease_name": f_extra,
+                            "hospital_name": f_extra,
+                            "bocw_regn_no": f_extra
+                        }
+                    )
+                    pdf_data = ApplicationFormPDFGenerator.generate_universal_welfare_pdf(u_form)
+                    slug_clean = target_scheme.get("scheme_id", "welfare_scheme")
+                    file_name = f"{slug_clean.upper()}_Official_Application_{f_name.replace(' ', '_')}.pdf"
+
+                st.download_button(
+                    label=f"📥 Download Filled Official Form for '{target_scheme['name']}' (PDF)",
+                    data=pdf_data,
+                    file_name=file_name,
+                    mime="application/pdf"
+                )
+
 
